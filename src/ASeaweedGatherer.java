@@ -205,16 +205,22 @@ public class ASeaweedGatherer extends Script implements PaintListener, ServerMes
 		return ;	
 	}
 	
+	private long frames;
+	private int fps;
+	
 	@Override
 	public void onRepaint(Graphics g2) {
 		//if(isPaused || isWelcomeScreen() || isLoginScreen()) return ;
+		
+		frames++;
+		fps = (int) (frames / ((System.currentTimeMillis() - startTime) / 1000));
 		
 		Graphics2D g = (Graphics2D)g2;
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		
 		float x = (float) g.getDeviceConfiguration().getBounds().getCenterX() - 128, y = 46f;
-		
+				
 		RoundRectangle2D scoreboard = new RoundRectangle2D.Float(
 				x, 25, 256,
 				10 + (16 * 5), 5, 5);
@@ -223,24 +229,20 @@ public class ASeaweedGatherer extends Script implements PaintListener, ServerMes
 		g.fill(scoreboard);
 		
 		Font console = new Font("Arial", Font.PLAIN, 13);
-		FontMetrics fontMetrics = g.getFontMetrics();
-		
-		
-		
-		GradientPaint testGradientFill = new GradientPaint(x + 5, y, new Color(255, 255, 255, 255), x + 5, y - 13f, new Color(255, 255, 255, 0), false);
-		
 		g.setFont(console);
-		g.setPaint(testGradientFill);
-		g.drawString("Hello! " + fontMetrics.getHeight(), x + 5, y);
 		
-		paintStatusLog(g);
+		g.setColor(Color.white);
+		g.drawString("FPS: " + fps, 16, 16);
+		
+		drawTopGradientString(g, "Hello There!", x, y);
 		
 		return ;
 	}
 	
-	private void paintStatusLog(Graphics2D g) {
-		
-		
+	private void drawTopGradientString(Graphics2D g, String aString, float x, float y) {
+		GradientPaint testGradientFill = new GradientPaint(x + 5, y, new Color(255, 255, 255, 255), x + 5, y - 13f, new Color(255, 255, 255, 0), false);
+		g.setPaint(testGradientFill);
+		g.drawString(aString, x + 5, y);
 	}
 	
 	@Override
