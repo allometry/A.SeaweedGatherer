@@ -1,7 +1,5 @@
 import java.awt.Color;
 import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -13,14 +11,14 @@ import java.util.Map;
 import org.rsbot.event.events.ServerMessageEvent;
 import org.rsbot.event.listeners.PaintListener;
 import org.rsbot.event.listeners.ServerMessageListener;
-import org.rsbot.script.Calculations;
 import org.rsbot.script.Script;
 import org.rsbot.script.ScriptManifest;
 import org.rsbot.script.wrappers.RSArea;
 import org.rsbot.script.wrappers.RSInterfaceChild;
-import org.rsbot.script.wrappers.RSItemTile;
-import org.rsbot.script.wrappers.RSNPC;
 import org.rsbot.script.wrappers.RSTile;
+
+import com.sun.org.apache.bcel.internal.generic.FADD;
+import com.sun.org.apache.bcel.internal.generic.NEW;
 
 @ScriptManifest(authors = { "Allometry" }, category = "1", name = "A. Seaweed Gatherer", version = 1.0,
 		description = "" +
@@ -55,6 +53,8 @@ public class ASeaweedGatherer extends Script implements PaintListener, ServerMes
 	
 	private ArrayList<String> statusLog = new ArrayList<String>();
 	
+	private AnimationFade fadeAnimation = new AnimationFade();
+	
 	private RSArea seaweedArea = new RSArea(new RSTile(2692, 3721), new RSTile(2728, 3734));
 	
 	private RSInterfaceChild cookingSeaweedInterface, bankingSeerInterface;
@@ -67,12 +67,14 @@ public class ASeaweedGatherer extends Script implements PaintListener, ServerMes
 	
 	private States state;
 	private StateMonitor stateMonitor;
+	
 	private Thread stateThread;
 	
 	@Override
-	public boolean onStart(Map<String,String> args) {
+	public boolean onStart(Map<String,String> args) {		
 		stateMonitor = new StateMonitor();
 		stateThread = new Thread(stateMonitor);
+		
 		//stateThread.start();
 		
 		startTime = System.currentTimeMillis();
@@ -202,22 +204,19 @@ public class ASeaweedGatherer extends Script implements PaintListener, ServerMes
 	
 	@Override
 	public void serverMessageRecieved(ServerMessageEvent e) {
-		return ;	
+		return ;
 	}
-	
-	private long frames;
-	private int fps;
 	
 	@Override
 	public void onRepaint(Graphics g2) {
 		//if(isPaused || isWelcomeScreen() || isLoginScreen()) return ;
 		
-		frames++;
-		fps = (int) (frames / ((System.currentTimeMillis() - startTime) / 1000));
-		
 		Graphics2D g = (Graphics2D)g2;
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		
+		fadeAnimation.startClock();
+		fadeAnimation.tick();
 		
 		float x = (float) g.getDeviceConfiguration().getBounds().getCenterX() - 128, y = 46f;
 				
@@ -231,19 +230,25 @@ public class ASeaweedGatherer extends Script implements PaintListener, ServerMes
 		Font console = new Font("Arial", Font.PLAIN, 13);
 		g.setFont(console);
 		
-		g.setColor(Color.white);
-		g.drawString("FPS: " + fps, 16, 16);
+		g.setColor(new Color(255, 255, 255, 255));
+		fadeAnimation.setGraphics(g);
 		
-		drawTopGradientString(g, "Hello There!", x, y);
+		g.drawString("FPS: " + fadeAnimation.getFPS(), 16, 16);
 		
+		fadeAnimation.createSlowFadeOutFrameIndex();
+		fadeAnimation.fadeOut();
+		g.drawString("Fade Me!!!", 128, 32);
+				
 		return ;
 	}
 	
+	/*
 	private void drawTopGradientString(Graphics2D g, String aString, float x, float y) {
 		GradientPaint testGradientFill = new GradientPaint(x + 5, y, new Color(255, 255, 255, 255), x + 5, y - 13f, new Color(255, 255, 255, 0), false);
 		g.setPaint(testGradientFill);
 		g.drawString(aString, x + 5, y);
 	}
+	*/
 	
 	@Override
 	public void onFinish() {
@@ -254,12 +259,198 @@ public class ASeaweedGatherer extends Script implements PaintListener, ServerMes
 		
 		stateThread = null;
 		stateMonitor = null;
-		
+				
 		return ;
 	}
 	
 	private boolean timeout(long timeout) {
 		return System.currentTimeMillis() > timeout;
+	}
+		
+	public class AnimationFade extends AnimationFramework {
+		private boolean finishedAnimation = false;
+		private int frame = 0;
+		
+		private ArrayList<AnimationFrame> slowFadeInFrames;
+		private ArrayList<AnimationFrame> slowFadeOutFrames;
+		
+		public AnimationFade() {
+			slowFadeInFrames = new ArrayList<AnimationFrame>();
+			slowFadeOutFrames = new ArrayList<AnimationFrame>();
+		}
+		
+		public AnimationFade(Graphics2D g) {
+			super(g);
+			
+			slowFadeInFrames = new ArrayList<AnimationFrame>();
+			slowFadeOutFrames = new ArrayList<AnimationFrame>();
+		}
+		
+		public void createSlowFadeInFrameIndex() {
+			int maximumFrames = super.getFPS() * AnimationSpeed.SLOW.getSeconds();
+			int alphaChannel = super.getGraphics().getColor().getAlpha();
+			int deltaAlpha = alphaChannel / maximumFrames;
+			
+			Color tmpColor;
+			
+			for(int ixIndex = 0; ixIndex <= maximumFrames; ixIndex++) {
+				tmpColor = new Color(
+					super.getGraphics().getColor().getRed(),
+					super.getGraphics().getColor().getGreen(),
+					super.getGraphics().getColor().getBlue(),
+					alphaChannel);
+				
+				slowFadeInFrames.add(new AnimationFrame(tmpColor));
+				
+				alphaChannel += deltaAlpha;
+				if(alphaChannel + deltaAlpha > 255) break;
+			}
+		}
+		
+		public void createSlowFadeOutFrameIndex() {
+			int maximumFrames = super.getFPS() * AnimationSpeed.SLOW.getSeconds();
+			int alphaChannel = super.getGraphics().getColor().getAlpha();
+			int deltaAlpha = alphaChannel / maximumFrames;
+			
+			Color tmpColor;
+			
+			for(int ixIndex = 0; ixIndex <= maximumFrames; ixIndex++) {
+				tmpColor = new Color(
+					super.getGraphics().getColor().getRed(),
+					super.getGraphics().getColor().getGreen(),
+					super.getGraphics().getColor().getBlue(),
+					alphaChannel);
+				
+				slowFadeOutFrames.add(new AnimationFrame(tmpColor));
+				
+				alphaChannel -= deltaAlpha;
+				if(alphaChannel - deltaAlpha < 0) break;
+			}
+		}
+		
+		public void gotoBeginningAndReset() {
+			frame = 0;
+			finishedAnimation = false;
+		}
+		
+		public boolean fadeIn() {
+			if(finishedAnimation) return true;
+			
+			super.getGraphics().setColor(slowFadeInFrames.get(frame).getColor());
+			
+			if(frame + 1 >= slowFadeInFrames.size()) {
+				finishedAnimation = true;
+				return true;
+			} else {
+				frame++;
+			}
+			
+			return false;
+		}
+		
+		public boolean fadeOut() {
+			if(finishedAnimation) return true;
+			
+			super.getGraphics().setColor(slowFadeOutFrames.get(frame).getColor());
+			
+			if(frame + 1 >= slowFadeOutFrames.size()) {
+				finishedAnimation = true;
+				return true;
+			} else {
+				frame++;
+			}
+			
+			return false;
+		}
+	}
+	
+	public class AnimationFrame {
+		private Color color;
+		private Point position;
+		
+		public AnimationFrame(Color color) {
+			this.color = color;
+		}
+		
+		public AnimationFrame(Color color, Point position) {
+			this.color = color;
+			this.position = position;
+		}
+		
+		public Color getColor() {
+			return color;
+		}
+		
+		public Point getPosition() {
+			return position;
+		}
+	}
+	
+	public enum AnimationSpeed { 
+		SLOW(3), NORMAL(2), FAST(1);
+		
+		private int seconds;
+		
+		private AnimationSpeed(int seconds) {
+			this.seconds = seconds;
+		}
+		
+		public int getSeconds() {
+			return seconds;
+		}
+	};
+	
+	public class AnimationFramework {
+		private int fps;
+		private long clock, frames = 0;
+		
+		private Graphics2D g;
+		
+		public AnimationFramework() {
+			
+		}
+		
+		public AnimationFramework(Graphics2D g) {
+			this.g = g;
+		}
+		
+		public void startClock() {
+			if(clock <= 0) clock = System.currentTimeMillis();
+		}
+			
+		private int clockSeconds() {
+			try {
+				return (int)(System.currentTimeMillis() - clock) / 1000;
+			} catch(ArithmeticException e) {
+				return 1;
+			}
+		}
+		
+		public void tick() {
+			frames++;
+			
+			try {
+				fps = (int) frames / clockSeconds();
+			} catch(Exception e) {
+				fps = 1;
+			}
+		}
+		
+		public int getFPS() {
+			return fps;
+		}
+		
+		public long getFrames() {
+			return frames;
+		}
+		
+		public Graphics2D getGraphics() {
+			return g;
+		}
+		
+		public void setGraphics(Graphics2D g) {
+			this.g = g;
+		}
 	}
 	
 	private class StateMonitor implements Runnable {
